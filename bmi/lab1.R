@@ -98,6 +98,6 @@ write.table(gene.results, file="gene_details.txt", sep="\t")
 gene.up <- head(gene.results[gene.results$logFC > 0, ], n=10)
 gene.down <- head(gene.results[gene.results$logFC < 0, ], n=10)
 write.table(gene.up, file="genes_up_regulated.txt", sep="\t")
-write.table(gene.down, file="genes_down_regulated.txt", sep="\t")
+write.table(gene.down, file="genes_down_regulated.txt", sep="\n")
 
 
