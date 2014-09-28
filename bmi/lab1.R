@@ -92,3 +92,12 @@ gene.list <- topTable(eBayesFit, coef=1, number=1000000, sort.by='logFC')
 gene.symbols <- getSYMBOL(row.names(gene.list), "hgu133plus2.db")
 gene.results <- cbind(gene.list, gene.symbols)
 write.table(gene.results, file="gene_details.txt", sep="\t")
+
+# find the top 10 up-regulated and top 10 down-regulated genes
+# write them to a file for convenience
+gene.up <- head(gene.results[gene.results$logFC > 0, ], n=10)
+gene.down <- head(gene.results[gene.results$logFC < 0, ], n=10)
+write.table(gene.up, file="genes_up_regulated.txt", sep="\t")
+write.table(gene.down, file="genes_down_regulated.txt", sep="\t")
+
+
