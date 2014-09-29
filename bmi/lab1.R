@@ -82,13 +82,13 @@ eBayesFit <- eBayes(contrasts.fit(fit, cont.matrix))
 
 # print the number of probesets with |logFC| > 2, 3, 4
 # results: 481, 150 and 67 respectively
-lapply(2:4, function(x) nrow(topTable(eBayesFit, coef=1, number=10000, lfc=x)) )
+lapply(2:4, function(x) nrow(topTable(eBayesFit, coef=1, number=Inf, lfc=x)) )
 
 # get the probeset_ids and the relevant statistics
 # map the probeset_ids to their corresponding gene symbols, using the annotation db
 # combine/map probeset_ids and their statistics to gene symbols
 # write the results into a file
-gene.list <- topTable(eBayesFit, coef=1, number=1000000, sort.by='logFC')
+gene.list <- topTable(eBayesFit, coef=1, number=Inf, sort.by='logFC')
 gene.symbols <- getSYMBOL(row.names(gene.list), "hgu133plus2.db")
 gene.results <- cbind(gene.list, gene.symbols)
 write.table(gene.results, file="gene_details.txt", sep="\t")
@@ -99,5 +99,61 @@ gene.up <- head(gene.results[gene.results$logFC > 0, ], n=10)
 gene.down <- head(gene.results[gene.results$logFC < 0, ], n=10)
 write.table(gene.up, file="genes_up_regulated.txt", sep="\t")
 write.table(gene.down, file="genes_down_regulated.txt", sep="\t")
+
+par(mar=c(3,3,2,1), mgp=c(2,.7,0), tck=-.01)
+plot(
+    # logFC on x- and -log p-value on y-axis
+    gene.list$logFC, 
+    -log10(gene.list$P.Value),
+     
+    # set x and y-axis limits
+    xlim=c(-10, 10), 
+    ylim=c(0, 15),
+
+    # set x- and y-axis labels
+    xlab="log2 fold change", ylab="-log10 p-value")
+
+
+sum(abs(gene.list$logFC) > 2 & gene.list$P.Value < 0.001)
+
+##no_of_genes=27,306
+no_of_genes = dim(probeset.list)[1]
+##Gives 693 genes
+sum(abs(gene.list$logFC) > 2 & gene.list$P.Value < 0.05/no_of_genes)
+
+install.packages("ggplot2")
+require(ggplot2)
+
+
+
+##Highlight genes that have an absolute fold change > 2 and a p-value < Bonferroni cut-off
+gene.list$threshold = as.factor(abs(gene.list$logFC) > 2 & gene.list$P.Value < 0.05/no_of_genes)
+
+##Construct the plot object
+g = ggplot(data=gene.list, aes(x=lproogFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-10, 10)) + ylim(c(0, 15)) + xlab("log2 fold change") + ylab("-log10 p-value")
+g
+
+ind <- which(gene.list$gene.symbols == 'ESR1')
+##Graph not shown
+##g + geom_text(aes(x=gene.list[ind[1],]$logFC, y=-log10(gene.list[ind[1],]$P.Value), label=gene.list[ind[1],]$gene.symbols, size=1.2), colour="black")
+g + geom_text(aes(x=gene.list[ind,]$logFC, y=-log10(gene.list[ind,]$P.Value), label=gene.list[ind,]$gene.symbols, size=1.2), colour="black")
+
+gene.symbols[is.na(gene.symbols)] <- "XXXXX"
+probe.matches <- gene.symbols == "EGFR" | gene.symbols == "SOX2" | gene.symbols == "TP53"
+probe.not.positions <- which(!probe.matches)
+probe.labels <- gene.symbols
+probe.labels[probe.not.positions] <- NA
+# probe.labels <-  gene.symbols[probe.positions]
+
+ggplot(gene.list, 
+        aes(
+         label=probe.labels,
+         x=gene.list$logFC, 
+         y=-log10(gene.list$P.Value) )) + 
+        geom_point(aes(shape=probe.matches, color=probe.matches)) + 
+        geom_text(size=3) +
+        xlab("log2 fold-change") + 
+        ylab("-log10 p-value")
 
 
