@@ -25,11 +25,13 @@ constWorkingDirectory <- "~/Documents/projects/git-projects/r-projects/bmi"
 # directory where the required files will be downloaded
 setwd(constWorkingDirectory)
 
-# download the dataset, extract the .tar file
-# unzip the resulting gzipped files, to get the .cel files
-getGEOSuppFiles(constDataset)
-untar(paste(constDataset, "/", constDataset, "_RAW.tar", sep=""), exdir=constDataDirectory)
-sapply(paste(constDataDirectory, list.files(constDataDirectory, pattern = "gz$") , sep="/"), gunzip)
+funcGetDataFiles <- function(){
+  # download the dataset, extract the .tar file
+  # unzip the resulting gzipped files, to get the .cel files
+  getGEOSuppFiles(constDataset)
+  untar(paste(constDataset, "/", constDataset, "_RAW.tar", sep=""), exdir=constDataDirectory)
+  sapply(paste(constDataDirectory, list.files(constDataDirectory, pattern = "gz$") , sep="/"), gunzip)
+}
   
 # generate AffyBatch object from CEL and corresponding Annotation files
 # normalize the expression data using GC-RMA method and store the result
@@ -44,22 +46,25 @@ gcrmaEset <- readExpressionSet(constEsetFile)
 pData(gcrmaEset) <- pData(celAffyBatch)
 annotation(gcrmaEset) <- annotation(celAffyBatch)
 
-# set colour palette
-colors <- brewer.pal(8, "Set1")
+funcPreVisualize <- function(){
+  # set colour palette
+  colors <- brewer.pal(8, "Set1")
 
-# boxplot parameters:
-#   las = 3 indicates vertical naming in the x-axis
-# 	cex.axis adjusts the font of axis names, in terms of fraction of the default size
+  # boxplot parameters:
+  #   las = 3 indicates vertical naming in the x-axis
+  #   cex.axis adjusts the font of axis names, in terms of fraction of the default size
 
-# boxplot of unnormalized intensity values
-boxplot(celAffyBatch, col=colors, las=3, cex.axis=0.6)
-# plot a boxplot of normalized intensity values
-boxplot(gcrmaEset, col=colors, las=3, cex.axis=0.6)
+  # boxplot of unnormalized intensity values
+  boxplot(celAffyBatch, col=colors, las=3, cex.axis=0.6)
+  # plot a boxplot of normalized intensity values
+  boxplot(gcrmaEset, col=colors, las=3, cex.axis=0.6)
 
-# histogram of unnormalized values
-hist(celAffyBatch, col=colors)
-# histogram of normalized values
-hist(gcrmaEset, col=colors)
+  # histogram of unnormalized values
+  hist(celAffyBatch, col=colors)
+  # histogram of normalized values
+  hist(gcrmaEset, col=colors)  
+}
+
 
 celAffyBatch.filtered <- nsFilter(gcrmaEset, require.entrez=FALSE, remove.dupEntrez=FALSE)
 # log shows the various features excluded and the reason of exclusion
@@ -112,11 +117,17 @@ probe.labels <- paste("(", row.names(gene.results), ", ", gene.symbols, ")", sep
 # set unwanted probe labels to NA, for elimination
 probe.labels[probe.not.positions] <- NA
 write.table(probe.labels[!is.na(probe.labels)], file="gene_probe_map.txt")
+
+# volcano plot for fold-change vs p-values
+# genes(EGFR, TP53, SOX2) are indicated in a distinct color
 ggplot(gene.list, 
   aes(
      label=probe.labels,
      x=gene.list$logFC, 
      y=-log10(gene.list$P.Value))) + 
+  
+  # probe.matches has TRUE for the the three genes(EGFR, TP53, SOX2) and FALSE for all others
+  # this aesthetics help color the three genes differently than the others
   geom_point(aes(shape=probe.matches, 
                  colour=probe.matches)) + 
   geom_text(size=3) + 
@@ -126,3 +137,17 @@ ggplot(gene.list,
   scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("EGFR, TP53, SOX2", "Other")) +
   ggtitle("Volcano Plot(Fold-Change of Genes vs P-Value)")
 
+
+# select genes with |logFC| > 2, for enrichment analysis
+gene.train <- gene.results[abs(gene.results$logFC) > 2, ]$gene.symbols
+# filter out NA values and duplicates
+gene.train <- unique(gene.train[!is.na(gene.train)])
+# convert factors to characters for convenient output to a file
+gene.train <- as.character(gene.train)
+
+# change the source of output
+# format the output with one gene symbol per line(to paste into ToppGene)
+# reset the output to terminal
+sink(file="gene_train_set.txt")
+cat(gene_train, sep="\n")
+sink()
