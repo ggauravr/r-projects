@@ -61,7 +61,7 @@ celAffyBatch <- read.affy(covdesc="GDS3627_SampleAnnotation.txt", path=constData
 #############
 
 ##########################################
-# uncomment the below two lines, when run during the first time, 
+# uncomment the below two lines, when run for the first time, 
 # i.e. if the expression data is not stored in a file
 ##########################################
 
@@ -181,7 +181,7 @@ ggplot(gene.summary,
      y=-log10(gene.summary$P.Value))) + 
   
   # probe.matches has TRUE for the the three genes(EGFR, TP53, SOX2) and FALSE for all others
-  # this aesthetics help color the three genes differently than the others
+  # these aesthetics help color/shape the three genes differently than the others
   geom_point(aes(shape=probe.matches, 
                  colour=probe.matches)) + 
   geom_text(size=3) + 
@@ -195,13 +195,6 @@ ggplot(gene.summary,
 probe.matches <- abs(gene.details$logFC) > 3 & gene.details$P.Value < 0.05
 probe.not.positions <- which(!probe.matches)
 
-# construct a better indicative vector for labels
-# label format: "(probe_id, gene_symbol)"
-probe.labels <- row.names(gene.details)
-# set unwanted probe labels to NA, for elimination
-probe.labels[probe.not.positions] <- NA
-write.table(probe.labels[!is.na(probe.labels)], file="gene_probe_map1.txt")
-
 # volcano plot for fold-change vs p-values
 # probes with |logFC|> 3 and p-value < 0.05 are indicated in a distinct color
 ggplot(gene.summary, 
@@ -209,15 +202,14 @@ ggplot(gene.summary,
      x=gene.summary$logFC, 
      y=-log10(gene.summary$P.Value))) + 
   
-  # probe.matches has TRUE for the the three genes(EGFR, TP53, SOX2) and FALSE for all others
-  # this aesthetics help color the three genes differently than the others
+  # probe.matches has TRUE for the genes that match the above criteria and FALSE for all others
   geom_point(aes(shape=probe.matches, 
                  colour=probe.matches)) + 
-  # geom_text(size=1) + 
+  
   xlab("Log2 Fold-Change") + 
   ylab("-Log10 P-Value") + 
-  scale_shape_discrete(name="Shape", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Probes", "Other")) +
-  scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Probes", "Other")) +
+  scale_shape_discrete(name="Shape", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Genes", "Other")) +
+  scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Genes", "Other")) +
   ggtitle("Volcano Plot(Fold-Change vs P-Value)")
 
 ##############################
@@ -232,7 +224,7 @@ gene.train <- unique(gene.train[!is.na(gene.train)])
 gene.train <- as.character(gene.train)
 
 # change the source of output
-# format the output with one gene symbol per line(to paste into ToppGene)
+# format the output with one gene symbol per line(to paste into ToppFun/ToppGene)
 # reset the output to terminal
 sink(file="gene_train_set.txt")
 cat(gene_train, sep="\n")
