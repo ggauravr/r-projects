@@ -1,3 +1,12 @@
+###################################
+# CSE 5599/BMI 7830 Lab I
+#
+# Goal:
+# Differential Gene Expression study of NSCLC(non-small cell lung cancer) sub-types: 
+#   Adenocarcinoma(AC) and Squamous Cell Carcinoma(SCC)
+#
+###################################
+
 # install the necessary bioconductor packages/libraries
 source("http://bioconductor.org/biocLite.R")
 biocLite(pkgs=c("RColorBrewer", "limma", "affy", "gcrma", 
@@ -25,6 +34,10 @@ constWorkingDirectory <- "~/Documents/projects/git-projects/r-projects/bmi"
 # directory where the required files will be downloaded
 setwd(constWorkingDirectory)
 
+############## 
+# 1. Data Preparation
+##############
+
 funcGetDataFiles <- function(){
   # download the dataset, extract the .tar file
   # unzip the resulting gzipped files, to get the .cel files
@@ -32,27 +45,48 @@ funcGetDataFiles <- function(){
   untar(paste(constDataset, "/", constDataset, "_RAW.tar", sep=""), exdir=constDataDirectory)
   sapply(paste(constDataDirectory, list.files(constDataDirectory, pattern = "gz$") , sep="/"), gunzip)
 }
-  
+# funcGetDataFiles()
+
+##############################
+# 2. Annotation and AffyBatch object creation
+##############################
+
 # generate AffyBatch object from CEL and corresponding Annotation files
 # normalize the expression data using GC-RMA method and store the result
-# ExpressionSet object into a file for ease of future use
-
+# ExpressionSet object into a file for convience in future
 celAffyBatch <- read.affy(covdesc="GDS3627_SampleAnnotation.txt", path=constDataDirectory)
+
+#############
+# 3. Normalization
+#############
+
+##########################################
+# uncomment the below two lines, when run during the first time, 
+# i.e. if the expression data is not stored in a file
+##########################################
+
 # gcrmaEset <- gcrma(celAffyBatch)
 # write.exprs(gcrmaEset, file=constEsetFile)
 
 # load expressionSet object from the file saved above
+# set the pheno and annotation data from the AffyBatch object
 gcrmaEset <- readExpressionSet(constEsetFile)
 pData(gcrmaEset) <- pData(celAffyBatch)
 annotation(gcrmaEset) <- annotation(celAffyBatch)
+
+#################
+# 4. Visualization and QC
+#################
 
 funcPreVisualize <- function(){
   # set colour palette
   colors <- brewer.pal(8, "Set1")
 
+  #####################################################
   # boxplot parameters:
   #   las = 3 indicates vertical naming in the x-axis
   #   cex.axis adjusts the font of axis names, in terms of fraction of the default size
+  #####################################################
 
   # boxplot of unnormalized intensity values
   boxplot(celAffyBatch, col=colors, las=3, cex.axis=0.6)
@@ -64,15 +98,21 @@ funcPreVisualize <- function(){
   # histogram of normalized values
   hist(gcrmaEset, col=colors)  
 }
+# funcPreVisualize()
 
+#############################
+# 5. Comparative Analysis and Model Fitting
+#############################
 
-celAffyBatch.filtered <- nsFilter(gcrmaEset, require.entrez=FALSE, remove.dupEntrez=FALSE)
-# log shows the various features excluded and the reason of exclusion
+#####################################################
+# celAffyBatch.filtered$filter.log shows the various features excluded and the reason of exclusion
 # here, the only exclusions are from features where IQR < 0.5(default)
 # and the Affymetrix Quality Control probesets, that is the probesets whose names
 # begin with AFFY
 # SEE: ?nsFilter to understand the various arguments and the output
-celAffyBatch.filtered$filter.log
+#####################################################
+
+celAffyBatch.filtered <- nsFilter(gcrmaEset, require.entrez=FALSE, remove.dupEntrez=FALSE)
 gcrmaEset.filtered <- celAffyBatch.filtered$eset
 
 # prepare the design matrix and rename columns of the design as needed
@@ -90,41 +130,55 @@ eBayesFit <- eBayes(contrasts.fit(fit, cont.matrix))
 # results: 481, 150 and 67 respectively
 lapply(2:4, function(x) nrow(topTable(eBayesFit, coef=1, number=Inf, lfc=x)) )
 
+#######################
+# 6. ProbeSet to Gene Mapping
+#######################
+
 # get the probeset_ids and the relevant statistics
 # map the probeset_ids to their corresponding gene symbols, using the annotation db
 # combine/map probeset_ids and their statistics to gene symbols
 # write the results into a file
-gene.list <- topTable(eBayesFit, coef=1, number=Inf, sort.by='logFC')
-gene.symbols <- getSYMBOL(row.names(gene.list), "hgu133plus2.db")
-gene.results <- cbind(gene.list, gene.symbols)
-write.table(gene.results, file="gene_details.txt", sep="\t")
+gene.summary <- topTable(eBayesFit, coef=1, number=Inf, sort.by='logFC')
+gene.symbols <- getSYMBOL(row.names(gene.summary), "hgu133plus2.db")
+gene.details <- cbind(gene.summary, gene.symbols)
+write.table(gene.details, file="gene_details.txt", sep="\t")
+
+#########################
+# 7. Regulated Gene finding
+#########################
 
 # find the top 10 up-regulated and top 10 down-regulated genes
 # write them to a file for convenience
-gene.up <- head(gene.results[gene.results$logFC > 0, ], n=10)
-gene.down <- head(gene.results[gene.results$logFC < 0, ], n=10)
-write.table(gene.up, file="gene_up.txt", sep="\t")
-write.table(gene.down, file="gene_down.txt", sep="\t")
+gene.up <- head(gene.details[gene.details$logFC > 0, ], n=10)
+gene.down <- head(gene.details[gene.details$logFC < 0, ], n=10)
+# write.table(gene.up, file="gene_up.txt", sep="\t")
+# write.table(gene.down, file="gene_down.txt", sep="\t")
 
-# convert NA values to symbols for consistent handling
+# convert NA values to invalid symbols for consistent handling
 gene.symbols[is.na(gene.symbols)] <- "????"
+
+###################
+# 8. Volcano Plots
+###################
+
+# find the boolean array, matching the given criteria(match EGFR | SOX2 | TP53)
 probe.matches <- gene.symbols == "EGFR" | gene.symbols == "SOX2" | gene.symbols == "TP53"
 probe.not.positions <- which(!probe.matches)
 
 # construct a better indicative vector for labels
 # label format: "(probe_id, gene_symbol)"
-probe.labels <- paste("(", row.names(gene.results), ", ", gene.symbols, ")", sep="")
+probe.labels <- paste("(", row.names(gene.details), ", ", gene.symbols, ")", sep="")
 # set unwanted probe labels to NA, for elimination
 probe.labels[probe.not.positions] <- NA
-write.table(probe.labels[!is.na(probe.labels)], file="gene_probe_map.txt")
+# write.table(probe.labels[!is.na(probe.labels)], file="gene_probe_map.txt")
 
 # volcano plot for fold-change vs p-values
 # genes(EGFR, TP53, SOX2) are indicated in a distinct color
-ggplot(gene.list, 
+ggplot(gene.summary, 
   aes(
      label=probe.labels,
-     x=gene.list$logFC, 
-     y=-log10(gene.list$P.Value))) + 
+     x=gene.summary$logFC, 
+     y=-log10(gene.summary$P.Value))) + 
   
   # probe.matches has TRUE for the the three genes(EGFR, TP53, SOX2) and FALSE for all others
   # this aesthetics help color the three genes differently than the others
@@ -135,11 +189,43 @@ ggplot(gene.list,
   ylab("-Log10 P-Value") + 
   scale_shape_discrete(name="Shape", breaks=c(TRUE, FALSE), labels=c("EGFR, TP53, SOX2", "Other")) +
   scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("EGFR, TP53, SOX2", "Other")) +
-  ggtitle("Volcano Plot(Fold-Change of Genes vs P-Value)")
+  ggtitle("Volcano Plot(Fold-Change vs P-Value)")
 
+# find the boolean array for, genes with abs(logFC) > 3 and p < 0.05
+probe.matches <- abs(gene.details$logFC) > 3 & gene.details$P.Value < 0.05
+probe.not.positions <- which(!probe.matches)
+
+# construct a better indicative vector for labels
+# label format: "(probe_id, gene_symbol)"
+probe.labels <- row.names(gene.details)
+# set unwanted probe labels to NA, for elimination
+probe.labels[probe.not.positions] <- NA
+write.table(probe.labels[!is.na(probe.labels)], file="gene_probe_map1.txt")
+
+# volcano plot for fold-change vs p-values
+# probes with |logFC|> 3 and p-value < 0.05 are indicated in a distinct color
+ggplot(gene.summary, 
+  aes(
+     x=gene.summary$logFC, 
+     y=-log10(gene.summary$P.Value))) + 
+  
+  # probe.matches has TRUE for the the three genes(EGFR, TP53, SOX2) and FALSE for all others
+  # this aesthetics help color the three genes differently than the others
+  geom_point(aes(shape=probe.matches, 
+                 colour=probe.matches)) + 
+  # geom_text(size=1) + 
+  xlab("Log2 Fold-Change") + 
+  ylab("-Log10 P-Value") + 
+  scale_shape_discrete(name="Shape", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Probes", "Other")) +
+  scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Probes", "Other")) +
+  ggtitle("Volcano Plot(Fold-Change vs P-Value)")
+
+##############################
+# 9. Enrichment Analysis
+##############################
 
 # select genes with |logFC| > 2, for enrichment analysis
-gene.train <- gene.results[abs(gene.results$logFC) > 2, ]$gene.symbols
+gene.train <- gene.details[abs(gene.details$logFC) > 2, ]$gene.symbols
 # filter out NA values and duplicates
 gene.train <- unique(gene.train[!is.na(gene.train)])
 # convert factors to characters for convenient output to a file
