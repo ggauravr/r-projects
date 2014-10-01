@@ -100,6 +100,18 @@ funcPreVisualize <- function(){
 }
 # funcPreVisualize()
 
+# probe-level metric calculations on the CEL files
+celAffyBatch.qc <- fitPLM(celAffyBatch)
+# Create an image of the first .CEL:
+image(celAffyBatch.qc, which=1, add.legend=TRUE)
+
+# GSM258551.CEL 258572.CEL 258577 258587 258605 appear to be shifted from 0
+RLE(celAffyBatch.qc, main="RLE", las=3, cex.axis=0.6)
+# We can also use NUSE (Normalised Unscaled Standard Errors).
+# The median standard error should be 1 for most genes.
+# GSM258553 258570 258580 258590 258603 258551 258572 258584.CEL appear to have medaian standard error above 1
+NUSE(celAffyBatch.qc, main="NUSE", las=3, cex.axis=0.6)
+
 #############################
 # 5. Comparative Analysis and Model Fitting
 #############################
@@ -149,7 +161,7 @@ write.table(gene.details, file="gene_details.txt", sep="\t")
 
 # find the top 10 up-regulated and top 10 down-regulated genes
 # write them to a file for convenience
-gene.up <- head(gene.details[gene.details$logFC > 0, ], n=10)
+gene.up <- head(gene.details[gene.details$logFC > 0, ], n=11)
 gene.down <- head(gene.details[gene.details$logFC < 0, ], n=10)
 # write.table(gene.up, file="gene_up.txt", sep="\t")
 # write.table(gene.down, file="gene_down.txt", sep="\t")
@@ -210,22 +222,35 @@ ggplot(gene.summary,
   ylab("-Log10 P-Value") + 
   scale_shape_discrete(name="Shape", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Genes", "Other")) +
   scale_colour_discrete(name="Color", breaks=c(TRUE, FALSE), labels=c("Statistically Significant Genes", "Other")) +
-  ggtitle("Volcano Plot(Fold-Change vs P-Value)")
+  ggtitle("Volcano Plot(Fold-Change vs P-Value)") +
+  
+  # indicate the fold-change cut-off
+  geom_vline(xintercept=3, linetype=3) +
+  geom_vline(xintercept=-3, linetype=3)+
+  # indicate the p-value cut-off
+  geom_hline(yintercept=-log10(0.05), linetype=3)
 
 ##############################
 # 9. Enrichment Analysis
 ##############################
 
 # select genes with |logFC| > 2, for enrichment analysis
-gene.train <- gene.details[abs(gene.details$logFC) > 2, ]$gene.symbols
-# filter out NA values and duplicates
-gene.train <- unique(gene.train[!is.na(gene.train)])
+gene.train <- gene.details[abs(gene.details$logFC) > 2, ]
+# filter out NA values
+gene.train <- gene.train[!is.na(gene.train$gene.symbols), ]
+
+# get the probe_ids of the selected genes
 # convert factors to characters for convenient output to a file
-gene.train <- as.character(gene.train)
+gene.train.probe_ids <- row.names(gene.train)
+gene.train.symbols <- as.character(gene.train$gene.symbols)
 
 # change the source of output
 # format the output with one gene symbol per line(to paste into ToppFun/ToppGene)
 # reset the output to terminal
-sink(file="gene_train_set.txt")
-cat(gene_train, sep="\n")
+sink(file="gene_train_symbols.txt")
+cat(gene.train.symbols, sep="\n")
+sink()
+
+sink(file="gene_train_probeids.txt")
+cat(gene.train.probe_ids, sep="\n")
 sink()
